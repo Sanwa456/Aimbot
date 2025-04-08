@@ -1,83 +1,84 @@
-local Players = game:GetService("Players")
+
 local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local localPlayer = Players.LocalPlayer
-local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
-local mouse = localPlayer:GetMouse()
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 
 
-local projectileSpeed = 100
-local maxTargetDistance = 100 
-local projectileLifetime = 5 
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+local Holding = false
 
 
-local function GetNearestTarget(origin)
-	local nearestTarget = nil
-	local shortestDistance = maxTargetDistance
+local Aimbot = {
+    Enabled = true,
+    TeamCheck = false, 
+    AimPart = "Head", 
+    Sensitivity = 0.15, 
+    CircleSides = 60,
+    CircleRadius = 120,
+    CircleColor = Color3.fromRGB(255, 255, 255),
+    CircleFilled = false,
+    CircleVisible = true,
+    CircleThickness = 1,
+    Keybind = Enum.UserInputType.MouseButton2 
+}
 
-	for _, player in ipairs(Players:GetPlayers()) do
-		if player ~= localPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-			local targetPos = player.Character.HumanoidRootPart.Position
-			local distance = (targetPos - origin).Magnitude
-			if distance < shortestDistance then
-				shortestDistance = distance
-				nearestTarget = player.Character
-			end
-		end
-	end
 
-	return nearestTarget
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Filled = Aimbot.CircleFilled
+FOVCircle.NumSides = Aimbot.CircleSides
+FOVCircle.Radius = Aimbot.CircleRadius
+FOVCircle.Color = Aimbot.CircleColor
+FOVCircle.Thickness = Aimbot.CircleThickness
+FOVCircle.Visible = Aimbot.CircleVisible
+
+
+local function GetClosestPlayer()
+    local MaximumDistance = Aimbot.CircleRadius
+    local Target = nil
+
+    for _, v in ipairs(Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(Aimbot.AimPart) then
+            if Aimbot.TeamCheck and v.Team == LocalPlayer.Team then continue end
+
+            local Position, OnScreen = Camera:WorldToViewportPoint(v.Character[Aimbot.AimPart].Position)
+            local Distance = (Vector2.new(Position.X, Position.Y) - UserInputService:GetMouseLocation()).Magnitude
+
+            if OnScreen and Distance < MaximumDistance then
+                MaximumDistance = Distance
+                Target = v
+            end
+        end
+    end
+
+    return Target
 end
 
 
-local function FireProjectile()
-	local origin = character:WaitForChild("HumanoidRootPart").Position + Vector3.new(0, 2, 0)
-	local targetCharacter = GetNearestTarget(origin)
+UserInputService.InputBegan:Connect(function(input)
+    if input.UserInputType == Aimbot.Keybind then
+        Holding = true
+    end
+end)
 
-	
-	local projectile = Instance.new("Part")
-	projectile.Size = Vector3.new(0.4, 0.4, 0.4)
-	projectile.Shape = Enum.PartType.Ball
-	projectile.Material = Enum.Material.Neon
-	projectile.BrickColor = BrickColor.new("Bright red")
-	projectile.CFrame = CFrame.new(origin)
-	projectile.Anchored = false
-	projectile.CanCollide = false
-	projectile.Parent = workspace
-
-	local bv = Instance.new("BodyVelocity")
-	bv.Velocity = Vector3.new(0, 0, 0)
-	bv.MaxForce = Vector3.new(1, 1, 1) * 5000
-	bv.P = 1250
-	bv.Parent = projectile
-
-	
-	local connection
-	connection = RunService.Heartbeat:Connect(function()
-		if projectile == nil or not projectile.Parent then
-			connection:Disconnect()
-			return
-		end
-
-		if targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart") then
-			local direction = (targetCharacter.HumanoidRootPart.Position - projectile.Position).Unit
-			bv.Velocity = direction * projectileSpeed
-		else
-			
-			bv.Velocity = mouse.Hit.LookVector * projectileSpeed
-		end
-	end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Aimbot.Keybind then
+        Holding = false
+    end
+end)
 
 
-	task.delay(projectileLifetime, function()
-		if projectile then
-			projectile:Destroy()
-		end
-	end)
-end
+RunService.RenderStepped:Connect(function()
+    FOVCircle.Position = UserInputService:GetMouseLocation()
 
-
-mouse.Button1Down:Connect(function()
-	FireProjectile()
+    if Holding and Aimbot.Enabled then
+        local Target = GetClosestPlayer()
+        if Target and Target.Character and Target.Character:FindFirstChild(Aimbot.AimPart) then
+            local AimPartPos = Camera:WorldToViewportPoint(Target.Character[Aimbot.AimPart].Position)
+            mousemoverel(
+                (AimPartPos.X - UserInputService:GetMouseLocation().X) * Aimbot.Sensitivity,
+                (AimPartPos.Y - UserInputService:GetMouseLocation().Y) * Aimbot.Sensitivity
+            )
+        end
+    end
 end)
